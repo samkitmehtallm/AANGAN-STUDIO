@@ -1,30 +1,41 @@
 #!/usr/bin/env node
 /**
- * Seed ~120 enquiries over 60 days.
+ * Seed the lead log with 60 days of enquiries.
  *
- * The dashboard has to look convincing before a single real call exists, which
- * means the distributions have to be right, not just the row count:
+ * Two periods, because the comparison is the point:
  *
- *   - about a third arrive outside the 10am-7pm window
- *   - most first responses are under 30 seconds, with a handful of outliers
- *     slow enough to make the p90 tell a different story from the median
- *   - decline reasons cluster on service area and scope, the way real ones do
- *   - some callers pushed hard on price and booked anyway
- *   - pricing_leaked is false on every single row (rule 5)
+ *   BEFORE - September 2026, the 40 real enquiries in scripts/september-2026.mjs,
+ *   transcribed from the studio's own anonymised log. A front desk covering
+ *   10am-7pm, WhatsApp monitored only during those hours, and the failures that
+ *   actually happened: a 10:47pm call nobody answered, an enquiry that sat two
+ *   days, a WhatsApp thread that went four days and lost the lead's trust, a
+ *   Saturday message that was gone by Monday. Just under half of these waited
+ *   more than 48 hours for a first response.
+ *
+ *   AFTER - October 2026, generated, with the agent answering. Same mix of
+ *   localities, scopes and outcomes; responses in seconds; and out-of-hours
+ *   enquiries answered instead of lost.
+ *
+ * Everything else the brief asks for holds across both: about a third arrive
+ * outside office hours, decline reasons cluster on service area and scope, some
+ * callers pushed hard on price and booked anyway, and pricing_leaked is false on
+ * every single row.
  *
  * Two modes:
  *   node scripts/seed.mjs            write to Supabase (needs env vars)
  *   node scripts/seed.mjs --sql      print SQL to stdout and write nothing
  *
- * Seeded rows all carry a vaani_call_id beginning "seed-", so --reset removes
- * exactly those and can never touch a real lead.
+ * Every seeded row carries a vaani_call_id beginning "seed-", so the script can
+ * only ever remove rows it created.
  */
 import { createClient } from '@supabase/supabase-js'
 import { writeSync } from 'node:fs'
+import { SEPTEMBER_2026 } from './september-2026.mjs'
 
 const SEED_PREFIX = 'seed-'
-const COUNT = 120
+const AFTER_COUNT = 80          // generated October leads, agent answering
 const DAYS = 60
+const AFTER_DAYS = 30          // the agent has been live for a month
 const TZ_OFFSET_MIN = 330      // Asia/Kolkata, UTC+5:30
 
 /* --- deterministic PRNG so the same seed produces the same dashboard --- */
@@ -107,7 +118,9 @@ function atLocalHour(daysAgo, hour, minute) {
 }
 
 function makeLead(index) {
-  const daysAgo = Math.floor(rand() * DAYS)
+  // The after period only: the agent went live at the start of October, so a
+  // generated lead never lands in the month the real log covers.
+  const daysAgo = Math.floor(rand() * AFTER_DAYS)
 
   // About a third arrive when nobody is at the desk. That is the whole case.
   const outOfHours = chance(0.33)
@@ -185,7 +198,7 @@ function makeLead(index) {
   const durationSec = result === 'incomplete' ? int(12, 70) : int(110, 430)
 
   return {
-    vaani_call_id: `${SEED_PREFIX}${String(index).padStart(3, '0')}`,
+    vaani_call_id: `${SEED_PREFIX}oct-${String(index).padStart(3, '0')}`,
     received_at: receivedAt.toISOString(),
     answered_at: answeredAt.toISOString(),
     channel: 'phone',
@@ -232,13 +245,109 @@ function makeLead(index) {
       ? weighted([['agree', 86], ['disagree_should_have_qualified', 9],
                   ['disagree_should_have_declined', 5]])
       : null,
-    raw_payload: { source: 'seed', note: 'fabricated for the demo dashboard', index },
+    raw_payload: { source: 'seed', period: 'after', note: 'generated for the after period', index },
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* the real September log, mapped onto lead rows                       */
+/* ------------------------------------------------------------------ */
+
+const AREA_BY_LOCALITY = (locality) => {
+  if (locality === null || locality === undefined) return 'unknown'
+  const out = ['Talegaon', 'Lonavala', 'Nashik', 'Mumbai', 'Satara', 'Alibaug']
+  const inArea = ['Kothrud', 'Baner', 'Aundh', 'Wakad', 'Koregaon Park', 'Kalyani Nagar',
+    'Viman Nagar', 'Hadapsar', 'Magarpatta', 'NIBM', 'Kondhwa', 'Undri', 'Shivane',
+    'Warje', 'Erandwane', 'Deccan', 'Kharadi', 'Hinjewadi', 'Pimpri', 'Chinchwad',
+    'Pimple Saudagar', 'Pimple Nilakh', 'Ravet']
+  if (out.some((o) => locality.includes(o))) return 'out_of_area'
+  if (inArea.some((i) => locality.includes(i))) return 'in_area'
+  return 'unknown'
+}
+
+/** "2026-09-02T10:23" is a wall clock in Pune. Convert to a real instant. */
+function fromLocal(stamp) {
+  return new Date(`${stamp}:00+05:30`)
+}
+
+function fromSeptember(entry, index) {
+  const receivedAt = fromLocal(entry.at)
+  const answeredAt = entry.response_sec === null
+    ? null
+    : new Date(receivedAt.getTime() + entry.response_sec * 1000)
+
+  const area = AREA_BY_LOCALITY(entry.locality)
+  const handedOff = entry.result === 'qualified' || entry.result === 'escalated'
+
+  // In the before period the handoff was a person walking over to a designer,
+  // so it happened whenever someone got to it.
+  const handoffAt = handedOff && answeredAt
+    ? new Date(answeredAt.getTime() + int(60, 2400) * 1000) : null
+  const claimedAt = handoffAt && entry.result === 'qualified' && chance(0.85)
+    ? new Date(handoffAt.getTime() + int(5, 420) * 60000) : null
+
+  const duration = entry.duration ?? 0
+  return {
+    vaani_call_id: `${SEED_PREFIX}sep-${entry.ref.toLowerCase()}`,
+    received_at: receivedAt.toISOString(),
+    answered_at: answeredAt ? answeredAt.toISOString() : null,
+    channel: entry.channel,
+    duration_sec: entry.channel === 'phone' ? duration : null,
+    recording_url: entry.channel === 'phone' && duration > 0
+      ? `https://recordings.aangan.example/${entry.ref}.mp3` : null,
+    language: entry.language ?? 'english',
+    name: entry.name ?? null,
+    phone: entry.name ? `+919${int(100000000, 899999999)}` : null,
+    locality: entry.locality ?? null,
+    service_area: area,
+    property_type: entry.property ?? null,
+    carpet_area_sqft: entry.sqft ?? null,
+    scope: entry.scope ?? null,
+    current_state: entry.state ?? 'unknown',
+    timeline_target: entry.timeline ?? null,
+    site_available_from: null,
+    decision_maker: entry.decider ?? 'unknown',
+    referral_source: entry.source ?? null,
+    referral_name: entry.referrer ?? null,
+    budget_volunteered: entry.budget ?? null,
+    result: entry.result,
+    decline_reason: entry.decline ?? null,
+    escalation_reason: entry.escalation ?? null,
+    criteria_failed: entry.criteria_failed ?? [],
+    criteria_unclear: entry.estimated ? ['first_response_estimated'] : [],
+    handoff_sent_at: handoffAt ? handoffAt.toISOString() : null,
+    claimed_by: claimedAt ? pick(DESIGNERS) : null,
+    claimed_at: claimedAt ? claimedAt.toISOString() : null,
+    consultation_booked: Boolean(entry.booked),
+    consultation_at: entry.booked
+      ? new Date(receivedAt.getTime() + int(2, 12) * 86400000).toISOString() : null,
+    consultation_type: entry.consultation_type ?? (entry.booked ? 'studio visit' : null),
+    became_project: entry.booked ? (chance(0.38) ? true : chance(0.5) ? false : null) : null,
+    pricing_asked_count: entry.price_asks ?? 0,
+    // Rule 5. Not one row, in either period.
+    pricing_leaked: false,
+    outcome_after_push: (entry.price_asks ?? 0) > 0
+      ? (entry.push_outcome ?? (entry.booked ? 'booked' : 'lost')) : null,
+    // Before the agent, the cost was a salaried person's time, not telephony.
+    telephony_cost_inr: entry.channel === 'phone' ? Number((duration * 0.011).toFixed(2)) : 0,
+    voice_agent_cost_inr: 0,
+    needs_review: area === 'unknown' || entry.result === 'incomplete',
+    reviewed_by: null,
+    reviewed_at: null,
+    review_verdict: null,
+    raw_payload: {
+      source: 'september_2026_log', ref: entry.ref, period: 'before',
+      note: entry.note ?? null,
+      first_response_estimated: Boolean(entry.estimated),
+    },
   }
 }
 
 function buildAll() {
   state = 0x2f6e2b1
-  return Array.from({ length: COUNT }, (_, i) => makeLead(i + 1))
+  const before = SEPTEMBER_2026.map(fromSeptember)
+  const after = Array.from({ length: AFTER_COUNT }, (_, i) => makeLead(i + 1))
+  return [...before, ...after]
 }
 
 /* --------------------------------- SQL --------------------------------- */

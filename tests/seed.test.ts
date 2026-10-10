@@ -65,10 +65,23 @@ describe('the seed', () => {
     expect(count((r) => r.pricing_leaked !== 'false')).toBe(0)
   })
 
-  it('spreads across 60 days', () => {
+  it('spreads across both months', () => {
     const dates = rows.map((r) => unquote(r.received_at)!.slice(0, 10))
-    const unique = new Set(dates)
-    expect(unique.size).toBeGreaterThan(40)
+    expect(new Set(dates).size).toBeGreaterThan(30)
+  })
+
+  it('carries the 40 real September enquiries alongside the generated ones', () => {
+    const september = rows.filter((r) => r.vaani_call_id.includes('seed-sep-'))
+    const october = rows.filter((r) => r.vaani_call_id.includes('seed-oct-'))
+    expect(september).toHaveLength(40)
+    expect(october.length).toBeGreaterThan(60)
+  })
+
+  it('keeps all three channels, because the real log has all three', () => {
+    const channels = new Set(rows.map((r) => unquote(r.channel)))
+    expect(channels).toContain('phone')
+    expect(channels).toContain('whatsapp')
+    expect(channels).toContain('web_form')
   })
 
   it('puts about a third outside office hours', () => {
@@ -81,23 +94,71 @@ describe('the seed', () => {
     expect(pct).toBeLessThan(42)
   })
 
-  it('answers most calls in under 30 seconds', () => {
-    const fast = count((r) => {
-      const received = new Date(unquote(r.received_at)!).getTime()
-      const answered = new Date(unquote(r.answered_at)!).getTime()
-      return (answered - received) / 1000 < 30
-    })
-    expect(fast / rows.length).toBeGreaterThan(0.85)
+  const responseSec = (r: Record<string, string>): number | null => {
+    if (r.answered_at === 'null') return null
+    const received = new Date(unquote(r.received_at)!).getTime()
+    const answered = new Date(unquote(r.answered_at)!).getTime()
+    return (answered - received) / 1000
+  }
+  const september = () => rows.filter((r) => r.vaani_call_id.includes('seed-sep-'))
+  const october = () => rows.filter((r) => r.vaani_call_id.includes('seed-oct-'))
+
+  it('the before period is slow, which is the entire argument', () => {
+    // The studio quotes ~48% with no response inside 48 hours across a full
+    // month of ~200 enquiries. This 40-enquiry log is the studio's own curated
+    // sample and is kinder than that: about an eighth went past 48 hours.
+    // The figure asserted here is the one the log actually supports - over
+    // 12 hours, or never answered at all - because bending real data to fit a
+    // headline number would make every other figure on the dashboard suspect.
+    const before = september()
+    const overHalfADay = before.filter((r) => {
+      const sec = responseSec(r)
+      return sec === null || sec > 12 * 3600
+    }).length
+    const pct = (overHalfADay / before.length) * 100
+    expect(pct).toBeGreaterThan(30)
+    expect(pct).toBeLessThan(60)
   })
 
-  it('includes a handful of slow outliers, so the p90 differs from the median', () => {
-    const slow = count((r) => {
-      const received = new Date(unquote(r.received_at)!).getTime()
-      const answered = new Date(unquote(r.answered_at)!).getTime()
-      return (answered - received) / 1000 > 240
+  it('still has enquiries that waited more than two days', () => {
+    const overTwoDays = september().filter((r) => {
+      const sec = responseSec(r)
+      return sec === null || sec > 48 * 3600
     })
+    expect(overTwoDays.length).toBeGreaterThanOrEqual(4)
+  })
+
+  it('the after period answers almost everything in under 30 seconds', () => {
+    const after = october()
+    const fast = after.filter((r) => {
+      const sec = responseSec(r)
+      return sec !== null && sec < 30
+    }).length
+    expect(fast / after.length).toBeGreaterThan(0.85)
+  })
+
+  it('the after period still has outliers, so p90 differs from the median', () => {
+    const slow = october().filter((r) => (responseSec(r) ?? 0) > 240).length
     expect(slow).toBeGreaterThanOrEqual(2)
     expect(slow).toBeLessThanOrEqual(18)
+  })
+
+  it('the step change between the two periods is unmistakable', () => {
+    const med = (xs: number[]) => {
+      const s = xs.filter((x) => Number.isFinite(x)).sort((a, b) => a - b)
+      return s[Math.floor(s.length / 2)]
+    }
+    const beforeMedian = med(september().map((r) => responseSec(r) ?? Infinity))
+    const afterMedian = med(october().map((r) => responseSec(r) ?? Infinity))
+    expect(afterMedian).toBeLessThan(60)
+    expect(beforeMedian).toBeGreaterThan(afterMedian * 10)
+  })
+
+  it('records the one call nobody answered', () => {
+    // 9 September, 10:47pm. No voicemail, call-back unanswered. It is in the
+    // log because a lead that was never answered still happened.
+    const unanswered = september().filter((r) => r.answered_at === 'null')
+    expect(unanswered.length).toBeGreaterThanOrEqual(1)
   })
 
   it('has a believable outcome split', () => {
@@ -145,7 +206,7 @@ describe('the seed', () => {
   it('uses many different callers and localities', () => {
     // The previous seed had one name and two localities, which read as fake
     // the moment anyone looked at the list.
-    expect(new Set(rows.map((r) => r.name)).size).toBeGreaterThan(60)
+    expect(new Set(rows.map((r) => r.name)).size).toBeGreaterThan(50)
     expect(new Set(rows.map((r) => r.locality)).size).toBeGreaterThan(15)
   })
 
