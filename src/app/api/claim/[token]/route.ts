@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { verifyLinkToken } from '@/lib/tokens'
-import { claimLead, passLead } from '@/lib/claim'
+import { claimLead, passLead, acknowledgeLead } from '@/lib/claim'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -41,6 +41,23 @@ export async function GET(
     return result.ok
       ? page('Noted', 'You have been recorded as unavailable for this enquiry. It stays in the unclaimed queue for someone else.')
       : page('Could not record that', result.reason ?? 'Unknown error', 500)
+  }
+
+  if (verified.action === 'ack') {
+    const ack = await acknowledgeLead(supabase, verified.leadId, verified.designer)
+    if (ack.ok) {
+      return page(
+        'Noted — you are calling',
+        'This escalation is marked as being handled, so it will stop chasing. ' +
+        'Open the record for the number.',
+        200, ack.leadId
+      )
+    }
+    if (ack.reason === 'already_claimed') {
+      return page('Already being handled',
+        `${ack.claimedBy ?? 'Someone'} picked this up first.`, 200, ack.leadId)
+    }
+    return page('Could not record that', ack.reason ?? 'Unknown error', 500)
   }
 
   const result = await claimLead(supabase, verified.leadId, verified.designer)

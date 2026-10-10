@@ -13,7 +13,12 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
  * later, and an expired claim link would mean a lead nobody can pick up.
  * Rotating CLAIM_LINK_SECRET invalidates every outstanding link at once.
  */
-export type LinkAction = 'claim' | 'pass'
+/**
+ * 'ack' is the escalation's "I'm calling now". It is not a claim - nobody
+ * claims a problem call - but it stops the 15-minute watchdog, because the
+ * thing the watchdog is watching for is nobody picking it up.
+ */
+export type LinkAction = 'claim' | 'pass' | 'ack'
 
 function secret(): string {
   const s = process.env.CLAIM_LINK_SECRET
@@ -61,7 +66,7 @@ export function verifyLinkToken(token: string | null | undefined, key = secret()
   const action = segments[0]
   const leadId = segments[1]
   const designer = segments.slice(2).join(':')
-  if (action !== 'claim' && action !== 'pass') return null
+  if (action !== 'claim' && action !== 'pass' && action !== 'ack') return null
 
   const expected = createHmac('sha256', key).update(decoded, 'utf8').digest('base64url')
   if (mac.length !== expected.length) return null

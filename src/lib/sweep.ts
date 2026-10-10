@@ -94,3 +94,35 @@ export function decideEscalationAlert(
   // An escalation is woken for at any hour. It is already the exception.
   return { shouldAlert: true, ageSeconds, reason: 'unacknowledged' }
 }
+
+export const SLOW_RESPONSE_SEC = 300
+/** Two slow responses in one day stops being a pattern and becomes a fault. */
+export const SLOW_RESPONSES_BEFORE_IMMEDIATE = 2
+
+export interface SlowResponseDecision {
+  slowToday: number
+  /** Report it in tomorrow's digest and move on. */
+  digestOnly: boolean
+  /** Wake the founder now. */
+  immediate: boolean
+}
+
+/**
+ * A single slow response is noise - a caller who did not pick up, a network
+ * hiccup - and belongs in the daily digest. Two in one day is the agent or the
+ * telephony leg actually failing, and waiting until tomorrow to mention it
+ * wastes a day of enquiries.
+ */
+export function decideSlowResponseAlert(
+  leadsToday: Array<{ first_response_sec?: number | null }>
+): SlowResponseDecision {
+  const slowToday = leadsToday.filter(
+    (l) => typeof l.first_response_sec === 'number' && l.first_response_sec > SLOW_RESPONSE_SEC
+  ).length
+
+  return {
+    slowToday,
+    digestOnly: slowToday > 0 && slowToday < SLOW_RESPONSES_BEFORE_IMMEDIATE,
+    immediate: slowToday >= SLOW_RESPONSES_BEFORE_IMMEDIATE,
+  }
+}

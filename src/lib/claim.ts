@@ -81,3 +81,16 @@ export async function passLead(
 
   return updateError ? { ok: false, reason: updateError.message } : { ok: true }
 }
+
+/**
+ * "I'm calling now" on an escalation.
+ *
+ * Same conditional update as a claim, so two people tapping it still resolve
+ * to one owner, but the language and the card are different: an escalation is
+ * a problem to handle, not a lead to win.
+ */
+export async function acknowledgeLead(
+  supabase: SupabaseClient, leadId: string, person: string
+): Promise<ClaimResult> {
+  return claimLead(supabase, leadId, person)
+}

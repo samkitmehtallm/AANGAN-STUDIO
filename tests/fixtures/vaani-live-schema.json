@@ -1,0 +1,103 @@
+{
+  "_comment": "Pulled from the LIVE Vaani agent 42022c05-bc4f-4caa-87c9-b277292f4435 on 2026-10-10. Field names and enum values exactly as the agent will send them. No secrets: names and allowed values only.",
+  "agent_id": "42022c05-bc4f-4caa-87c9-b277292f4435",
+  "agent_display_name": "Aangan Studio — Front Desk",
+  "fields": [
+    {
+      "name": "Callback number",
+      "values": [],
+      "nullable": true
+    },
+    {
+      "name": "Decision maker",
+      "values": [
+        "caller",
+        "caller and partner",
+        "represented",
+        "researching for others"
+      ],
+      "nullable": true
+    },
+    {
+      "name": "Scope of work",
+      "values": [],
+      "nullable": true
+    },
+    {
+      "name": "Property type and area",
+      "values": [],
+      "nullable": true
+    },
+    {
+      "name": "Locality",
+      "values": [],
+      "nullable": true
+    },
+    {
+      "name": "Budget if volunteered",
+      "values": [],
+      "nullable": true
+    },
+    {
+      "name": "Timeline",
+      "values": [],
+      "nullable": true
+    },
+    {
+      "name": "Current state of site",
+      "values": [
+        "bare shell",
+        "builder handover",
+        "lived in",
+        "under renovation"
+      ],
+      "nullable": true
+    },
+    {
+      "name": "Consultation booked",
+      "values": [],
+      "nullable": true
+    },
+    {
+      "name": "Caller name",
+      "values": [],
+      "nullable": false
+    },
+    {
+      "name": "How they found Aangan",
+      "values": [
+        "referral",
+        "instagram",
+        "google",
+        "linkedin",
+        "builder",
+        "press",
+        "other"
+      ],
+      "nullable": false
+    },
+    {
+      "name": "Times price was asked",
+      "values": [],
+      "nullable": false
+    },
+    {
+      "name": "Price revealed by agent",
+      "values": [
+        "yes",
+        "no"
+      ],
+      "nullable": false
+    },
+    {
+      "name": "Call outcome",
+      "values": [
+        "qualified",
+        "declined",
+        "escalated",
+        "incomplete"
+      ],
+      "nullable": false
+    }
+  ]
+}

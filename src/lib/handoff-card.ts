@@ -133,6 +133,8 @@ export interface CardOptions {
   /** Omitted for escalations, which carry no Claim button. */
   claimUrl?: string | null
   passUrl?: string | null
+  /** Escalations only: "I'm calling now". Stops the 15-minute watchdog. */
+  ackUrl?: string | null
   /** Set on a repost so the card leads with how long this has been sitting. */
   ageSeconds?: number | null
   kind?: 'handoff' | 'escalation' | 'repost'
@@ -181,6 +183,9 @@ export function renderHandoffCard(lead: CardLead, options: CardOptions): Rendere
     for (const f of flags) textLines.push(`  - ${f}`)
   }
   textLines.push('', `Open record (callback number is here): ${recordUrl}`)
+  if (options.ackUrl) {
+    textLines.push('', `I'm calling now: ${options.ackUrl}`)
+  }
   if (options.claimUrl) {
     textLines.push('', `Claim this lead: ${options.claimUrl}`)
     if (options.passUrl) textLines.push(`Can't take it: ${options.passUrl}`)
@@ -212,6 +217,10 @@ export function renderHandoffCard(lead: CardLead, options: CardOptions): Rendere
     <div style="padding:4px 20px 24px">
       <a href="${esc(options.claimUrl)}" style="display:inline-block;background:#166534;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-weight:600;font-size:14px">Claim this lead</a>
       ${options.passUrl ? `<a href="${esc(options.passUrl)}" style="display:inline-block;margin-left:10px;background:#fff;color:#4b5563;text-decoration:none;padding:10px 20px;border:1px solid #d1d5db;border-radius:6px;font-size:14px">Can't take it</a>` : ''}
+    </div>`
+    : options.ackUrl ? `
+    <div style="padding:4px 20px 24px">
+      <a href="${esc(options.ackUrl)}" style="display:inline-block;background:#92400e;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-weight:600;font-size:14px">I'm calling now</a>
     </div>` : ''
 
   const html = `<!doctype html>

@@ -267,14 +267,25 @@ describe('RULE 1: record before notify', () => {
 })
 
 describe('routing through the webhook', () => {
-  it('sends an escalation to the escalation address with no claim link', async () => {
+  it('sends an escalation to the escalation address with no Claim button', async () => {
     await post(validCall({
       call_id: 'esc_1', 'Call outcome': 'escalated',
       escalation_reason: 'Caller asked for the founder',
     }))
     expect(sentEmails).toHaveLength(1)
     expect(sentEmails[0].to).toEqual(['escalation_to@aangan.test'])
-    expect(sentEmails[0].html).not.toContain('/api/claim/')
+    // Nobody claims a problem call.
+    expect(sentEmails[0].html).not.toContain('Claim this lead')
+    expect(sentEmails[0].text).not.toContain("Can't take it")
+  })
+
+  it('an escalation offers "I\'m calling now" instead, which stops the watchdog', async () => {
+    await post(validCall({
+      call_id: 'esc_2', 'Call outcome': 'escalated',
+      escalation_reason: 'Complaint about a past project',
+    }))
+    expect(sentEmails[0].html).toContain("I'm calling now")
+    expect(sentEmails[0].text).toContain('/api/claim/')   // the signed ack link
   })
 
   it('emails nobody for a clean decline', async () => {

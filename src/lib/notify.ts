@@ -102,8 +102,15 @@ export async function notifyForLead(
     } else if (routed.destination === 'escalation') {
       const kind: AlertKind = 'escalation'
       if (await claimAlert(supabase, lead.lead_id, kind, { reason: routed.reason })) {
-        // No claim link. Nobody claims a problem call; a human reads it.
-        const card = renderHandoffCard(lead, { baseUrl: baseUrl(), kind: 'escalation' })
+        // No claim link. Nobody claims a problem call - but there is an
+        // "I'm calling now", which is what stops the 15-minute watchdog.
+        let ackUrl: string | undefined
+        try {
+          ackUrl = `${baseUrl()}/api/claim/${signLinkToken('ack', lead.lead_id, 'studio')}`
+        } catch (error) {
+          console.error('[notify:ack-link]', error)
+        }
+        const card = renderHandoffCard(lead, { baseUrl: baseUrl(), kind: 'escalation', ackUrl })
         const sent = await sendEmail({
           to: recipients('ESCALATION_TO'),
           subject: card.subject, html: card.html, text: card.text,

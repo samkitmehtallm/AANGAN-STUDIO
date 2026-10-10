@@ -55,6 +55,8 @@ export interface MappedLead {
   consultation_booked: boolean
   consultation_at: string | null
   consultation_type: string | null
+  /** The agreed slot exactly as the agent captured it, when it was prose. */
+  consultation_note: string | null
   pricing_asked_count: number
   pricing_leaked: boolean
   outcome_after_push: PushOutcome | null
@@ -469,15 +471,44 @@ export function mapVaaniPayload(payload: unknown, options: MapOptions = {}): Map
   const agent_confidence = coerceText(pick(index, 'agent_confidence', 'confidence'), 50)
 
   /* --- consultation --------------------------------------------- */
+  // "Consultation booked" is NOT a yes/no field. The live agent's prompt is
+  // "extract the exact agreed day and time and whether it is a site visit or at
+  // the studio... If no consultation was booked, leave null", so what arrives is
+  // a sentence like "Saturday 4 October, 10:30 AM, site visit" - and null is the
+  // negative. Reading it as a boolean made every real booking record as NOT
+  // booked, which would have shown the funnel converting nothing.
   const consultationRaw = pick(index, 'Consultation booked', 'consultation_booked', 'booked')
-  const consultation_booked = coerceBool(consultationRaw) ?? false
-  if (consultationRaw !== null && coerceBool(consultationRaw) === null) {
-    flags.push('unrecognised_consultation_booked')
+  const consultationText = coerceText(consultationRaw, 300)
+  const consultationBool = coerceBool(consultationRaw)
+
+  let consultation_booked: boolean
+  if (consultationBool !== null) {
+    consultation_booked = consultationBool
+  } else if (consultationText !== null) {
+    // Any description of an agreed slot means it was agreed. Guard the handful
+    // of ways an agent writes a negative in prose.
+    consultation_booked = !/^(not booked|none|no consultation|not agreed|declined|n\/?a)$/i
+      .test(consultationText)
+  } else {
+    consultation_booked = false
   }
-  const consultation_at = coerceTimestamp(pick(index, 'consultation_at',
-    'Consultation at', 'consultation_time', 'appointment_at'))
-  const consultation_type = coerceText(pick(index, 'consultation_type',
-    'Consultation type', 'appointment_type'), 100)
+
+  const consultation_at =
+    coerceTimestamp(pick(index, 'consultation_at', 'Consultation at',
+      'consultation_time', 'appointment_at')) ??
+    (consultation_booked && consultationBool === null ? coerceTimestamp(consultationText) : null)
+
+  const consultation_type =
+    coerceText(pick(index, 'consultation_type', 'Consultation type', 'appointment_type'), 100) ??
+    (consultation_booked && consultationText
+      ? (/site\s*visit/i.test(consultationText) ? 'site visit'
+         : /studio/i.test(consultationText) ? 'studio visit'
+         : /video|call|online|zoom|meet/i.test(consultationText) ? 'video call'
+         : consultationText.slice(0, 100))
+      : null)
+
+  // The agreed slot in the caller's words, kept verbatim for the card.
+  const consultation_note = consultationBool === null ? consultationText : null
 
   const transcript = coerceText(pick(index, 'transcript', 'Transcript', 'conversation'), 100000)
 
@@ -574,6 +605,7 @@ export function mapVaaniPayload(payload: unknown, options: MapOptions = {}): Map
     consultation_booked,
     consultation_at,
     consultation_type,
+    consultation_note,
     pricing_asked_count,
     pricing_leaked,
     outcome_after_push,

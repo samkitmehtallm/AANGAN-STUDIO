@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getSupabase } from '@/lib/supabase'
 import { authorizeCron } from '@/lib/cron-auth'
-import { decideRepost, decideEscalationAlert } from '@/lib/sweep'
+import { decideRepost, decideEscalationAlert, decideSlowResponseAlert, SLOW_RESPONSE_SEC } from '@/lib/sweep'
 import { renderHandoffCard, type CardLead } from '@/lib/handoff-card'
 import { sendEmail, recipients } from '@/lib/email'
 import { signLinkToken } from '@/lib/tokens'
@@ -64,7 +64,11 @@ export async function GET(request: Request): Promise<NextResponse> {
         age_seconds: escalation.ageSeconds,
       })
       if (claimed) {
-        const card = renderHandoffCard(row, { baseUrl: baseUrl(), kind: 'escalation' })
+        let ackUrl: string | undefined
+        try {
+          ackUrl = `${baseUrl()}/api/claim/${signLinkToken('ack', row.lead_id, 'studio')}`
+        } catch { /* no signing secret: send without the button */ }
+        const card = renderHandoffCard(row, { baseUrl: baseUrl(), kind: 'escalation', ackUrl })
         await sendEmail({
           to: [...recipients('ESCALATION_TO'), ...recipients('FOUNDER_TO')],
           subject: `UNACKNOWLEDGED ESCALATION (${formatAge(escalation.ageSeconds)}) — ${row.name ?? 'caller'}`,
@@ -112,10 +116,53 @@ export async function GET(request: Request): Promise<NextResponse> {
     reposted.push(row.lead_id)
   }
 
+  /* --- slow responses: digest normally, immediate on the second one ---- */
+  // A single slow response is noise and waits for the digest. Two in a day is
+  // the agent or the telephony leg actually failing, and waiting until tomorrow
+  // to say so wastes a day of enquiries.
+  const dayKey = new Intl.DateTimeFormat('en-CA', {
+    timeZone: process.env.OFFICE_TZ ?? 'Asia/Kolkata',
+  }).format(now)
+  const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString()
+
+  let slowAlerted = 0
+  const { data: todays } = await supabase
+    .from('leads')
+    .select('lead_id, name, first_response_sec, received_at')
+    .gte('received_at', since)
+    .is('deleted_at', null)
+
+  const slow = decideSlowResponseAlert(todays ?? [])
+  if (slow.immediate) {
+    const claimed = await claimAlert(
+      supabase, null, `slow_response_${dayKey}` as `unclaimed_repost_${number}`,
+      { slow_count: slow.slowToday }
+    )
+    if (claimed) {
+      const worst = (todays ?? [])
+        .filter((l) => (l.first_response_sec ?? 0) > SLOW_RESPONSE_SEC)
+        .sort((a, b) => (b.first_response_sec ?? 0) - (a.first_response_sec ?? 0))
+      await sendEmail({
+        to: recipients('FOUNDER_TO'),
+        subject: `${slow.slowToday} slow responses today — the agent or the line is failing`,
+        text:
+          `${slow.slowToday} enquiries today waited more than five minutes for a ` +
+          `first response. One is noise; this is not.\n\n` +
+          worst.slice(0, 10).map((l) =>
+            `  - ${l.name ?? 'unnamed'} — ${formatAge(l.first_response_sec ?? 0)}`).join('\n') +
+          `\n\nDashboard: ${baseUrl()}/dashboard`,
+        html: '',
+      })
+      slowAlerted = slow.slowToday
+    }
+  }
+
   return NextResponse.json({
     ok: true, ran_at: now.toISOString(),
     examined: data?.length ?? 0,
     reposted, escalations_alerted: escalationsAlerted,
+    slow_responses_today: slow.slowToday,
+    slow_alert_sent: slowAlerted > 0,
     skipped: skipped.slice(0, 50),
   })
 }
