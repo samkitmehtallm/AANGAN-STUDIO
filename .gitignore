@@ -13,3 +13,4 @@ npm-debug.log*
 next-env.d.ts
 coverage/
 .vscode/
+seed-data.sql
