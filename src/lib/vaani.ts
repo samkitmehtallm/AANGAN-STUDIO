@@ -11,6 +11,8 @@
  * their console might emit, and we look inside a handful of likely containers.
  */
 import { resolveServiceArea, type AreaVerdict } from './service-area'
+import { qualify, compareWithAgent } from './qualification'
+import { detectPricingLeak } from './pricing-leak'
 
 export type LeadResult = 'qualified' | 'declined' | 'escalated' | 'incomplete'
 export type LeadState =
@@ -477,6 +479,8 @@ export function mapVaaniPayload(payload: unknown, options: MapOptions = {}): Map
   const consultation_type = coerceText(pick(index, 'consultation_type',
     'Consultation type', 'appointment_type'), 100)
 
+  const transcript = coerceText(pick(index, 'transcript', 'Transcript', 'conversation'), 100000)
+
   /* --- the pricing guardrail ------------------------------------ */
   const pricingCountRaw = pick(index, 'Times price was asked', 'times_price_was_asked',
     'pricing_asked_count', 'price_asked_count')
@@ -493,7 +497,21 @@ export function mapVaaniPayload(payload: unknown, options: MapOptions = {}): Map
     // one we look at.
     flags.push('unrecognised_price_revealed_treated_as_leak')
   }
-  const pricing_leaked = leakedRaw === null ? false : (leaked ?? true)
+  const reportedLeak = leakedRaw === null ? false : (leaked ?? true)
+
+  // The agent grading its own homework is not enough for the one number that
+  // must read zero. Scan the transcript ourselves; this can raise a leak the
+  // agent reported as clean, never lower one it admitted.
+  const leakScan = detectPricingLeak(transcript, reportedLeak)
+  if (leakScan.verdict === 'leaked' && !reportedLeak) {
+    flags.push(`undeclared_pricing_leak:${leakScan.evidence.join(' | ')}`)
+  }
+  if (leakScan.verdict === 'unattributed') {
+    // A figure with no speaker attached is a question for a human, not an
+    // incident. Flagging it as a leak would make the metric meaningless.
+    flags.push('possible_pricing_leak_unattributed')
+  }
+  const pricing_leaked = leakScan.verdict === 'leaked'
 
   const pushRaw = pick(index, 'outcome_after_push', 'Outcome after push', 'post_push_outcome')
   const pushMatch = matchEnum<PushOutcome>(pushRaw, PUSH_TABLE, 'undecided')
@@ -516,7 +534,6 @@ export function mapVaaniPayload(payload: unknown, options: MapOptions = {}): Map
 
   const recording_url = coerceUrl(pick(index, 'recording_url', 'Recording URL', 'recording'))
   const transcript_url = coerceUrl(pick(index, 'transcript_url', 'Transcript URL'))
-  const transcript = coerceText(pick(index, 'transcript', 'Transcript', 'conversation'), 100000)
 
   const channelText = coerceText(pick(index, 'channel', 'Channel', 'medium'), 40)
   const channel: MappedLead['channel'] =
@@ -564,6 +581,35 @@ export function mapVaaniPayload(payload: unknown, options: MapOptions = {}): Map
     voice_agent_cost_inr,
     needs_review: false,
     raw_payload: payload ?? null,
+  }
+
+  // Re-derive the five criteria from the rubric in code. The agent already
+  // decided; this decides again so that a model's opinion can never silently
+  // override a rule. A disagreement is not an error - the agent heard the call
+  // and we see only extracted fields - but it is the cheapest early warning the
+  // studio has that the agent's rubric has drifted.
+  const ourVerdict = qualify({
+    locality: lead.locality,
+    scope: lead.scope,
+    property_type: lead.property_type,
+    carpet_area_sqft: lead.carpet_area_sqft,
+    timeline_target: lead.timeline_target,
+    site_available_from: lead.site_available_from,
+    decision_maker: lead.decision_maker,
+    budget_volunteered: lead.budget_volunteered,
+    transcript: lead.transcript,
+  })
+
+  lead.criteria_failed = [...new Set([...lead.criteria_failed, ...ourVerdict.failed])]
+  lead.criteria_unclear = [...new Set([...lead.criteria_unclear, ...ourVerdict.unclear])]
+
+  const comparison = compareWithAgent(ourVerdict, lead.result)
+  if (!comparison.agrees) {
+    flags.push(`rubric_disagrees:${ourVerdict.verdict}_not_${lead.result}`)
+    lead.agent_confidence = lead.agent_confidence ?? 'disputed'
+  }
+  if (lead.result === 'declined' && lead.decline_reason === null && ourVerdict.declineReason) {
+    lead.decline_reason = ourVerdict.declineReason.slice(0, 500)
   }
 
   // A lead needs a human when we could not read something that matters, when

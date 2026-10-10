@@ -1,0 +1,59 @@
+{
+  "_comment": "Nikhil Deshpande's rubric (docs/qualification-rubric.md) and the scope rules from docs/services.md, as data. Edited by humans, read by src/lib/qualification.ts. No model reads this at request time.",
+  "version": 1,
+
+  "timeline": {
+    "_comment": "services.md: design is 3-4 weeks, execution 8-16. qualified.md: the site must be available for execution within 8-10 weeks of the consultation, and nothing can be ready in under 6 weeks from today.",
+    "minimum_lead_weeks": 6,
+    "comfortable_lead_weeks": 10
+  },
+
+  "commercial": {
+    "_comment": "services.md caps commercial at ~3,000 sq ft. T18 in the September log was declined at 180 sq ft as below minimum scope; the front desk gave 500 as the floor.",
+    "min_sqft": 500,
+    "max_sqft": 3000
+  },
+
+  "out_of_scope_work": [
+    { "key": "advice_only", "label": "design advice without execution",
+      "patterns": ["just looking for ideas", "just ideas", "come and advise", "advice only",
+                   "consultation only", "second opinion", "suggestions on colours",
+                   "colour advice", "advice on colours", "just want advice", "want advice",
+                   "advisory", "give us some ideas", "some ideas for", "ideas for our",
+                   "i'll do the execution myself", "i will do the execution",
+                   "rearrange furniture", "just exploring", "only advice", "just want suggestions"] },
+    { "key": "architecture", "label": "architectural or structural work",
+      "patterns": ["move walls", "moving walls", "break walls", "breaking walls",
+                   "structural change", "structural work", "load bearing", "add a floor",
+                   "building permit", "architect for"] },
+    { "key": "furniture_sourcing", "label": "standalone furniture sourcing",
+      "patterns": ["only source furniture", "just source", "furniture sourcing only",
+                   "only procurement", "just buy the furniture"] },
+    { "key": "vastu_only", "label": "standalone Vastu advisory",
+      "patterns": ["vastu consultation only", "only vastu", "vastu advice only",
+                   "just vastu"] },
+    { "key": "hospitality_retail", "label": "restaurant, hotel, retail or gym",
+      "patterns": ["restaurant", "hotel", "cafe", "cafeteria", "retail store", "retail shop",
+                   "showroom", "gym", "fitness studio", "salon", "spa", "bar ", "pub ",
+                   "hospitality"] }
+  ],
+
+  "decision_maker": {
+    "_comment": "qualified.md: the caller should decide, or be authorised. Researching for others is insufficient ON ITS OWN - T14 in the log passed because the parents will attend the consultation. So this is a soft criterion: unclear never declines by itself.",
+    "sufficient": ["caller", "caller_and_partner", "represented"],
+    "insufficient": ["researching_for_others"]
+  },
+
+  "budget": {
+    "_comment": "qualified.md: never probe, never quote. Only act when a VOLUNTEERED number is clearly below what the described scope costs. These floors are deliberately conservative - they exist to catch the T10 case (1-1.5 lakh for a kitchen and a bedroom), not to pre-qualify. Rupees.",
+    "single_room_floor": 350000,
+    "partial_home_floor": 600000,
+    "full_home_floor": 900000,
+    "commercial_floor": 1500000
+  },
+
+  "soft_criteria": ["budget", "decision_maker"],
+  "hard_criteria": ["real_project", "service_area", "timeline"],
+
+  "_decline_rule": "qualified.md: two or more criteria fail -> decline. One fail -> decline only when it is a hard criterion. Unclear on a hard criterion -> ask one question. Unclear on a soft criterion -> treat as qualified and note it."
+}

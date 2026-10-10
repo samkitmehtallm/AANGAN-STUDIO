@@ -145,13 +145,33 @@ describe('missing and junk fields', () => {
 
 describe('service area is resolved during mapping', () => {
   it.each([
-    ['Baner', 'in_area', false],
-    ['Talegaon, near Pune', 'out_of_area', false],
-    ['Timbuktu', 'unknown', true],
-  ])('%s -> %s', (locality, area, review) => {
+    ['Baner', 'in_area'],
+    ['Talegaon, near Pune', 'out_of_area'],
+    ['Timbuktu', 'unknown'],
+  ])('%s -> %s', (locality, area) => {
     const { lead } = mapVaaniPayload(validPayload({ Locality: locality }), { now: NOW })
     expect(lead.service_area).toBe(area)
-    expect(lead.needs_review).toBe(review)
+  })
+
+  it('a clean in-area lead needs no review', () => {
+    const { lead } = mapVaaniPayload(validPayload({ Locality: 'Baner' }), { now: NOW })
+    expect(lead.needs_review).toBe(false)
+  })
+
+  it('an unrecognised locality flags for review', () => {
+    const { lead } = mapVaaniPayload(validPayload({ Locality: 'Timbuktu' }), { now: NOW })
+    expect(lead.needs_review).toBe(true)
+  })
+
+  it('flags the agent qualifying an out-of-area lead', () => {
+    // The fixture says "qualified" while the locality is Talegaon. The rubric
+    // re-derived in code disagrees, and a disagreement is exactly the thing a
+    // human needs to see - it is how agent drift gets caught.
+    const { lead, flags } = mapVaaniPayload(
+      validPayload({ Locality: 'Talegaon, near Pune' }), { now: NOW })
+    expect(lead.needs_review).toBe(true)
+    expect(flags.join()).toContain('rubric_disagrees')
+    expect(lead.criteria_failed).toContain('service_area')
   })
 
   it('never writes in_area for an unrecognised locality', () => {
