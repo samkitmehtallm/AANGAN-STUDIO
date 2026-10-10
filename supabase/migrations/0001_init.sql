@@ -91,6 +91,9 @@ create table leads (
   consultation_booked boolean not null default false,
   consultation_at timestamptz,
   consultation_type text,
+  -- The live agent sends "Consultation booked" as prose, not a boolean, so the
+  -- agreed slot is kept verbatim for the handoff card.
+  consultation_note text,
   -- Tri-state on purpose: null means "not known yet", not "no".
   became_project boolean,
 
