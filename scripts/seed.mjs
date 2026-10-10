@@ -35,7 +35,11 @@ import { SEPTEMBER_2026 } from './september-2026.mjs'
 const SEED_PREFIX = 'seed-'
 const AFTER_COUNT = 80          // generated October leads, agent answering
 const DAYS = 60
-const AFTER_DAYS = 30          // the agent has been live for a month
+// The agent went live on 1 October. Generated leads land in that window only -
+// if they spilled back into September they would sit alongside the real log and
+// the before/after comparison, which is the entire point of the dashboard,
+// would be muddled into a single smear.
+const AGENT_LIVE_FROM = '2026-10-01T00:00:00+05:30'
 const TZ_OFFSET_MIN = 330      // Asia/Kolkata, UTC+5:30
 
 /* --- deterministic PRNG so the same seed produces the same dashboard --- */
@@ -118,9 +122,11 @@ function atLocalHour(daysAgo, hour, minute) {
 }
 
 function makeLead(index) {
-  // The after period only: the agent went live at the start of October, so a
-  // generated lead never lands in the month the real log covers.
-  const daysAgo = Math.floor(rand() * AFTER_DAYS)
+  // Days since the agent went live, never before it.
+  const liveDays = Math.max(
+    1, Math.ceil((Date.now() - new Date(AGENT_LIVE_FROM).getTime()) / 86400000)
+  )
+  const daysAgo = Math.floor(rand() * liveDays)
 
   // About a third arrive when nobody is at the desk. That is the whole case.
   const outOfHours = chance(0.33)
