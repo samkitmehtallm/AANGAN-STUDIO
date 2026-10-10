@@ -3,6 +3,14 @@ import { getSupabase } from '@/lib/supabase'
 import { mapVaaniPayload } from '@/lib/vaani'
 import { verifySignature, readSignatureHeader } from '@/lib/signature'
 import { notifyForLead } from '@/lib/notify'
+import type { CardLead } from '@/lib/handoff-card'
+
+/** What the upsert returns: everything the card and the router need. */
+type StoredLead = CardLead & {
+  vaani_call_id: string
+  handoff_sent_at: string | null
+  claimed_at: string | null
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -72,7 +80,7 @@ export async function POST(request: Request): Promise<NextResponse> {
   }
 
   /* --- 3. write, before anything else ---------------------------- */
-  let stored
+  let stored: StoredLead
   try {
     const supabase = getSupabase()
     const { data, error } = await supabase
@@ -96,7 +104,9 @@ export async function POST(request: Request): Promise<NextResponse> {
       .single()
 
     if (error) throw new Error(error.message)
-    stored = data
+    // PostgREST cannot infer a row type from a column string without generated
+    // database types, so the shape is asserted here against the select above.
+    stored = data as unknown as StoredLead
   } catch (error) {
     // A 500 here is correct: the lead is NOT saved, so we want the retry.
     console.error('[webhook:store-failed]', error)

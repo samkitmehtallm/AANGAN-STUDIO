@@ -87,7 +87,7 @@ function keyOf(s: string): string {
  */
 function buildIndex(payload: unknown): Map<string, unknown> {
   const index = new Map<string, unknown>()
-  const containers: unknown[] = []
+  const containers: Array<Record<string, unknown>> = []
   if (isPlainObject(payload)) {
     containers.push(payload)
     for (const nest of [

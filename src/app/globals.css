@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #11161d;
+  --color-ink-soft: #4a5565;
+  --color-ink-faint: #8a93a3;
+  --color-line: #e3e6eb;
+  --color-paper: #ffffff;
+  --color-ground: #f6f7f9;
+  --color-good: #15803d;
+  --color-warn: #b45309;
+  --color-bad: #b91c1c;
+  --color-accent: #1d4ed8;
+}
+
+html, body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures everywhere a number is compared against another number. */
+.tnum { font-variant-numeric: tabular-nums; }
