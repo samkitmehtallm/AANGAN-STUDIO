@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   summarise, byHourOfDay, declineReasons, percentile, median,
-  responseBuckets, dashboardAlerts, type LeadRow,
+  responseBuckets, dashboardAlerts, compareChannels, type LeadRow,
 } from '../src/lib/metrics'
 
 function lead(overrides: Partial<LeadRow> = {}): LeadRow {
@@ -231,5 +231,43 @@ describe('the alert strip', () => {
       lead({ pricing_leaked: true }),
     ], now)
     expect(alerts[0].severity).toBe('incident')
+  })
+})
+
+describe('this period against the one before it', () => {
+  const now = new Date('2026-10-10T12:00:00Z')
+  const daysAgo = (n: number) =>
+    new Date(now.getTime() - n * 86400_000).toISOString()
+
+  it('counts each channel in its own current and previous window', () => {
+    const rows = [
+      lead({ channel: 'phone', received_at: daysAgo(5) }),
+      lead({ channel: 'phone', received_at: daysAgo(10) }),
+      lead({ channel: 'phone', received_at: daysAgo(40) }),   // previous period
+      lead({ channel: 'whatsapp', received_at: daysAgo(3) }),
+      lead({ channel: 'web_form', received_at: daysAgo(45) }), // previous period
+    ]
+    const result = compareChannels(rows, 30, now)
+    const phone = result.find((c) => c.channel === 'phone')!
+    expect(phone.current).toBe(2)
+    expect(phone.previous).toBe(1)
+    expect(phone.changePct).toBe(100)
+
+    const web = result.find((c) => c.channel === 'web_form')!
+    expect(web.current).toBe(0)
+    expect(web.previous).toBe(1)
+    expect(web.changePct).toBe(-100)
+  })
+
+  it('always reports all three channels, even at zero', () => {
+    const result = compareChannels([], 30, now)
+    expect(result.map((c) => c.channel).sort()).toEqual(['phone', 'web_form', 'whatsapp'])
+  })
+
+  it('reports null rather than dividing by a previous period of zero', () => {
+    const rows = [lead({ channel: 'phone', received_at: daysAgo(2) })]
+    const phone = compareChannels(rows, 30, now).find((c) => c.channel === 'phone')!
+    expect(phone.previous).toBe(0)
+    expect(phone.changePct).toBeNull()
   })
 })

@@ -12,6 +12,7 @@
  * never handed the phone field in the first place.
  */
 import { formatLocal, formatAge } from './office-hours'
+import { parseLeadWeeks } from './qualification'
 
 export interface CardLead {
   lead_id: string
@@ -23,6 +24,7 @@ export interface CardLead {
   scope: string | null
   current_state: string | null
   timeline_target: string | null
+  site_available_from: string | null
   decision_maker: string | null
   referral_source: string | null
   referral_name: string | null
@@ -38,12 +40,37 @@ export interface CardLead {
   pricing_leaked?: boolean | null
   language?: string | null
   duration_sec?: number | null
+  first_response_sec?: number | null
+  consultation_note?: string | null
 }
 
 export interface RenderedCard {
   subject: string
   html: string
   text: string
+}
+
+/**
+ * Urgency, shown only when it is not normal.
+ *
+ * The brief asks for this on the card and it has to mean something, or it is
+ * just a word. Two things actually change how fast a designer should move: a
+ * site that needs starting sooner than the studio's comfortable lead time, and
+ * a caller who has already been kept waiting.
+ */
+export function deriveUrgency(lead: CardLead): string | null {
+  const reasons: string[] = []
+
+  const text = [lead.timeline_target, lead.site_available_from].filter(Boolean).join(' ')
+  const weeks = parseLeadWeeks(text)
+  if (weeks !== null && weeks < 10) reasons.push(`starts in ~${Math.round(weeks)} weeks`)
+  else if (/asap|as soon as possible|immediately|right away/i.test(text)) {
+    reasons.push('caller said as soon as possible')
+  }
+
+  if ((lead.first_response_sec ?? 0) > 300) reasons.push('already waited to be answered')
+
+  return reasons.length === 0 ? null : reasons.join(' · ')
 }
 
 const LABELS: Record<string, string> = {
@@ -71,6 +98,18 @@ function sourceLine(lead: CardLead): string {
     return lead.referral_name ? `Referral — ${lead.referral_name}` : 'Referral (name not captured)'
   }
   return lead.referral_source.charAt(0).toUpperCase() + lead.referral_source.slice(1)
+}
+
+/** The brief asks who decides AND whether they were on the call. */
+function deciderLine(lead: CardLead): string {
+  const who = label(lead.decision_maker)
+  if (lead.decision_maker === 'caller') return `${who} — on the call`
+  if (lead.decision_maker === 'caller_and_partner') return `${who} — caller was on the call`
+  if (lead.decision_maker === 'represented') return `${who} — authorised, on the call`
+  if (lead.decision_maker === 'researching_for_others') {
+    return `${who} — NOT on the call, confirm the owners attend`
+  }
+  return who
 }
 
 function propertyLine(lead: CardLead): string {
@@ -147,9 +186,11 @@ export function renderHandoffCard(lead: CardLead, options: CardOptions): Rendere
   const received = new Date(lead.received_at)
   const who = lead.name ?? 'Caller name not captured'
 
+  const urgency = kind === 'handoff' ? deriveUrgency(lead) : null
   const subjectPrefix =
     kind === 'escalation' ? 'ESCALATION'
     : kind === 'repost' ? `UNCLAIMED ${options.ageSeconds ? formatAge(options.ageSeconds) : ''}`.trim()
+    : urgency ? 'New enquiry · MOVE FAST'
     : 'New enquiry'
   const subject =
     `${subjectPrefix} — ${who}${lead.locality ? `, ${lead.locality}` : ''}` +
@@ -162,14 +203,17 @@ export function renderHandoffCard(lead: CardLead, options: CardOptions): Rendere
     ['Scope', lead.scope ?? '—'],
     ['State of site', label(lead.current_state)],
     ['Timeline', lead.timeline_target ?? '—'],
-    ['Who decides', label(lead.decision_maker)],
+    ['Site available', lead.site_available_from ?? 'Not established'],
+    ['Who decides', deciderLine(lead)],
     ['Found us via', sourceLine(lead)],
     ['Budget', lead.budget_volunteered ?? 'Not volunteered'],
-    ['Call received', formatLocal(received)],
+    ['Consultation', lead.consultation_note ?? '—'],
+    ['Call', `${formatLocal(received)}${lead.duration_sec ? ` · ${formatAge(lead.duration_sec)}` : ''}`],
   ]
 
   /* ---------------- text ---------------- */
   const textLines: string[] = []
+  if (urgency) textLines.push(`MOVE FAST — ${urgency}.`, '')
   if (kind === 'repost' && options.ageSeconds) {
     textLines.push(`STILL UNCLAIMED — ${formatAge(options.ageSeconds)} old.`, '')
   }
@@ -229,6 +273,7 @@ export function renderHandoffCard(lead: CardLead, options: CardOptions): Rendere
     ${banner}
     <div style="padding:20px 20px 6px">
       <div style="font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:#6b7280;font-weight:600">Aangan Studio — inbound enquiry</div>
+      ${urgency ? `<div style="margin-top:6px;display:inline-block;background:#fef3c7;color:#92400e;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;padding:3px 8px;border-radius:3px">Move fast — ${esc(urgency)}</div>` : ''}
       <div style="font-size:21px;font-weight:650;color:#111827;margin-top:6px">${esc(who)}</div>
     </div>
     <table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse;margin:14px 0 18px">

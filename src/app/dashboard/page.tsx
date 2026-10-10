@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { fetchLeads } from '@/lib/leads-repo'
 import {
   summarise, byHourOfDay, declineReasons, responseBuckets, dashboardAlerts,
+  compareChannels,
 } from '@/lib/metrics'
 import { formatAge } from '@/lib/office-hours'
 import { Band, Stat, BarRow } from '@/components/primitives'
@@ -10,15 +11,35 @@ import { HourChart } from '@/components/hour-chart'
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-const WINDOW_DAYS = 60
+/** The ranges the founder actually asks for, not an arbitrary date picker. */
+const RANGES = [
+  { days: 7, label: '7 days' },
+  { days: 30, label: '30 days' },
+  { days: 60, label: '60 days' },
+  { days: 90, label: '90 days' },
+]
+const DEFAULT_DAYS = 60
 
-export default async function DashboardPage() {
-  let leads
+export default async function DashboardPage({
+  searchParams,
+}: { searchParams: Promise<{ days?: string }> }) {
+  const { days } = await searchParams
+  const requested = Number(days)
+  const WINDOW_DAYS = RANGES.some((r) => r.days === requested) ? requested : DEFAULT_DAYS
+
+  let all
   try {
-    leads = await fetchLeads({ sinceDays: WINDOW_DAYS })
+    // Twice the window, so this period can be shown against the one before it.
+    all = await fetchLeads({ sinceDays: WINDOW_DAYS, includePreviousPeriod: true })
   } catch (error) {
     return <ConfigError message={error instanceof Error ? error.message : String(error)} />
   }
+
+  // Every headline figure is this period only; the older half exists purely
+  // for the comparison below.
+  const cutoff = Date.now() - WINDOW_DAYS * 86400_000
+  const leads = all.filter((l) => new Date(l.received_at).getTime() >= cutoff)
+  const channels = compareChannels(all, WINDOW_DAYS)
 
   const stats = summarise(leads)
   const hours = byHourOfDay(leads)
@@ -41,10 +62,27 @@ export default async function DashboardPage() {
             {' '}An enquiry answered within the hour converts at about four times the rate of one answered the next day.
           </p>
         </div>
-        <Link href="/dashboard/leads"
-              className="rounded-lg border border-[var(--color-line)] bg-[var(--color-paper)] px-3.5 py-2 text-sm font-medium hover:bg-[var(--color-ground)]">
-          All leads →
-        </Link>
+        <div className="flex items-center gap-3">
+          <div className="flex overflow-hidden rounded-lg border border-[var(--color-line)] bg-[var(--color-paper)]">
+            {RANGES.map((range) => {
+              const active = range.days === WINDOW_DAYS
+              return (
+                <Link key={range.days} href={`/dashboard?days=${range.days}`}
+                      className={`px-3 py-2 text-sm font-medium transition ${
+                        active
+                          ? 'bg-[var(--color-ink)] text-white'
+                          : 'text-[var(--color-ink-soft)] hover:bg-[var(--color-ground)]'
+                      }`}>
+                  {range.label}
+                </Link>
+              )
+            })}
+          </div>
+          <Link href="/dashboard/leads"
+                className="rounded-lg border border-[var(--color-line)] bg-[var(--color-paper)] px-3.5 py-2 text-sm font-medium hover:bg-[var(--color-ground)]">
+            All leads →
+          </Link>
+        </div>
       </header>
 
       {/* ---------------- alert strip ---------------- */}
@@ -69,6 +107,34 @@ export default async function DashboardPage() {
           })
         )}
       </div>
+
+      {/* ---------------- 0. volume, by channel, against last period ------- */}
+      <Band title="Where enquiries came from"
+            note={`This ${WINDOW_DAYS}-day window against the ${WINDOW_DAYS} days before it.`}>
+        <div className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+          {channels.map((channel) => {
+            const up = (channel.changePct ?? 0) > 0
+            const flat = channel.changePct === 0 || channel.changePct === null
+            return (
+              <Stat key={channel.channel}
+                    label={channel.label}
+                    value={String(channel.current)}
+                    tone={flat ? 'neutral' : up ? 'good' : 'warn'}
+                    hint={
+                      channel.changePct === null
+                        ? channel.previous === 0 && channel.current === 0
+                          ? 'none either period'
+                          : 'nothing in the previous period'
+                        : `${up ? '+' : ''}${channel.changePct}% vs ${channel.previous} before`
+                    } />
+            )
+          })}
+        </div>
+        <p className="mt-4 border-t border-[var(--color-line)] pt-3 text-xs text-[var(--color-ink-faint)]">
+          WhatsApp and the web form are not yet wired to the agent. Their figures are historical,
+          from the September log, and will stay flat until those channels are connected.
+        </p>
+      </Band>
 
       {/* ---------------- 1. response health ---------------- */}
       <Band title="Response health"

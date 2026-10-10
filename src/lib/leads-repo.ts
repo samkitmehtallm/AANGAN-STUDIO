@@ -22,11 +22,18 @@ export interface LeadsQuery {
   sinceDays?: number
   filter?: string | null
   limit?: number
+  /**
+   * Fetch twice the window, so the dashboard can show this period against the
+   * one before it. The extra rows are filtered out of the headline figures.
+   */
+  includePreviousPeriod?: boolean
 }
 
 export async function fetchLeads(query: LeadsQuery = {}): Promise<LeadRow[]> {
   const supabase = getSupabase()
-  const since = new Date(Date.now() - (query.sinceDays ?? 60) * 86400_000).toISOString()
+  const windowDays = query.sinceDays ?? 60
+  const span = query.includePreviousPeriod ? windowDays * 2 : windowDays
+  const since = new Date(Date.now() - span * 86400_000).toISOString()
 
   let builder = supabase
     .from('leads')

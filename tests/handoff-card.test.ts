@@ -187,3 +187,54 @@ describe('missing fields', () => {
     expect(card.subject).toBeTruthy()
   })
 })
+
+describe('urgency, shown only when it is not normal', () => {
+  it('says nothing for a comfortable timeline', () => {
+    const card = renderHandoffCard(lead({ timeline_target: 'Start in 6 months' }), { baseUrl: BASE })
+    expect(card.subject).not.toContain('MOVE FAST')
+    expect(card.text).not.toContain('MOVE FAST')
+  })
+
+  it('flags a site that needs starting inside the comfortable lead time', () => {
+    const card = renderHandoffCard(lead({ timeline_target: '7 weeks' }), { baseUrl: BASE })
+    expect(card.subject).toContain('MOVE FAST')
+    expect(card.text).toContain('7 weeks')
+  })
+
+  it('flags a caller who already waited to be answered', () => {
+    const card = renderHandoffCard(
+      lead({ timeline_target: 'Flexible', first_response_sec: 3600 }), { baseUrl: BASE })
+    expect(card.text).toContain('already waited')
+  })
+
+  it('does not put urgency on an escalation or a repost', () => {
+    const escalation = renderHandoffCard(
+      lead({ timeline_target: '7 weeks', result: 'escalated' }),
+      { baseUrl: BASE, kind: 'escalation' })
+    expect(escalation.subject).not.toContain('MOVE FAST')
+  })
+})
+
+describe('the card fields the brief names exactly', () => {
+  it('shows when the site is available, not just the deadline', () => {
+    const card = renderHandoffCard(
+      lead({ timeline_target: 'Done by March', site_available_from: 'Possession 15 November' }),
+      { baseUrl: BASE })
+    expect(card.text).toContain('Site available')
+    expect(card.text).toContain('Possession 15 November')
+  })
+
+  it('says whether the decision-maker was on the call', () => {
+    const onCall = renderHandoffCard(lead({ decision_maker: 'caller' }), { baseUrl: BASE })
+    expect(onCall.text).toContain('on the call')
+
+    const notOnCall = renderHandoffCard(
+      lead({ decision_maker: 'researching_for_others' }), { baseUrl: BASE })
+    expect(notOnCall.text).toContain('NOT on the call')
+  })
+
+  it('gives the call time and how long it ran', () => {
+    const card = renderHandoffCard(lead({ duration_sec: 212 }), { baseUrl: BASE })
+    expect(card.text).toMatch(/Call:.*3 min/)
+  })
+})

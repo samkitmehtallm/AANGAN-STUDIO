@@ -109,10 +109,15 @@ export async function GET(request: Request): Promise<NextResponse> {
       baseUrl: baseUrl(), kind: 'repost',
       ageSeconds: decision.ageSeconds, claimUrl, passUrl,
     })
-    await sendEmail({
-      to: recipients('HANDOFF_TO'),
-      subject: card.subject, html: card.html, text: card.text,
-    })
+
+    // The brief's ladder: the designers' group first, then the studio head.
+    // A second nag to the same inbox that already ignored the first one is
+    // just noise; widening the audience is what actually moves a lead.
+    const to = decision.repostNumber >= 2
+      ? [...recipients('HANDOFF_TO'), ...recipients('ESCALATION_TO')]
+      : recipients('HANDOFF_TO')
+
+    await sendEmail({ to, subject: card.subject, html: card.html, text: card.text })
     reposted.push(row.lead_id)
   }
 

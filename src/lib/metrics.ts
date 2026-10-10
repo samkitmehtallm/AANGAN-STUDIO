@@ -266,3 +266,54 @@ export function dashboardAlerts(leads: LeadRow[], now = new Date()): DashboardAl
 
   return alerts
 }
+
+/**
+ * This period against the one before it, by channel.
+ *
+ * The founder's question is not "how many enquiries" but "are we getting more
+ * or fewer, and through which door". A single total answers neither, so each
+ * channel is shown against its own previous period rather than against the
+ * others.
+ */
+export interface ChannelComparison {
+  channel: string
+  label: string
+  current: number
+  previous: number
+  /** Percentage change, or null when the previous period had nothing to divide by. */
+  changePct: number | null
+}
+
+const CHANNEL_LABELS: Record<string, string> = {
+  phone: 'Phone', whatsapp: 'WhatsApp', web_form: 'Web form',
+}
+
+export function compareChannels(
+  leads: LeadRow[], windowDays: number, now = new Date()
+): ChannelComparison[] {
+  const ms = windowDays * 86400_000
+  const currentFrom = now.getTime() - ms
+  const previousFrom = currentFrom - ms
+
+  const counts = new Map<string, { current: number; previous: number }>()
+  for (const key of ['phone', 'whatsapp', 'web_form']) {
+    counts.set(key, { current: 0, previous: 0 })
+  }
+
+  for (const lead of leads) {
+    const at = new Date(lead.received_at).getTime()
+    const channel = lead.channel ?? 'phone'
+    if (!counts.has(channel)) counts.set(channel, { current: 0, previous: 0 })
+    const entry = counts.get(channel)!
+    if (at >= currentFrom) entry.current += 1
+    else if (at >= previousFrom) entry.previous += 1
+  }
+
+  return [...counts.entries()].map(([channel, v]) => ({
+    channel,
+    label: CHANNEL_LABELS[channel] ?? channel,
+    current: v.current,
+    previous: v.previous,
+    changePct: v.previous === 0 ? null : Math.round(((v.current - v.previous) / v.previous) * 100),
+  }))
+}
