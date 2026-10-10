@@ -113,6 +113,27 @@ is checked against the outcome the front desk actually reached.
 
 ---
 
+## Deployed at
+
+| | |
+|---|---|
+| Dashboard | https://aangan-enquiry-system-noreply6.vercel.app/dashboard |
+| Webhook | https://aangan-enquiry-system-noreply6.vercel.app/api/vaani/webhook |
+| Components map | `docs/components-map.html` — open it, or print to A3 landscape |
+
+Verified on production rather than assumed: the dashboard returns 401 without
+the password and 200 with it, an unsigned POST to the webhook returns 401, and
+`/api/cron/sweep` refuses without its bearer token and runs with it.
+
+Vercel Deployment Protection is **off** on this project, deliberately. With it
+on, Vaani's webhook POSTs are bounced to a Vercel login and the system can never
+receive a call. The app carries its own auth instead: HMAC on the webhook, a
+bearer token on the cron routes, signed tokens on the claim links, and basic
+auth on the dashboard.
+
+To redeploy: `bash scripts/deploy.sh`, or push to `main` once the project is
+linked to the repo.
+
 ## Setup
 
 Requires Node 20.9+.

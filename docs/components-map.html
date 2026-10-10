@@ -1,0 +1,667 @@
+<title>Ring to Handoff</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+
+<style>
+:root {
+  --paper:      #F3F5F4;
+  --surface:    #FFFFFF;
+  --surface-2:  #EAEEEC;
+  --ink:        #14211F;
+  --ink-2:      #3C4B48;
+  --muted:      #5E6B68;
+  --rule:       #D3DBD8;
+  --rule-firm:  #AFBCB8;
+  --accent:     #0E6E5E;
+  --accent-wash:#DCEAE6;
+  --alert:      #B4431F;
+  --alert-wash: #F6E3DA;
+  --amber:      #8A6209;
+  --amber-wash: #F4EBD5;
+
+  --sans: 'Archivo', ui-sans-serif, -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper:      #101816;
+    --surface:    #16211E;
+    --surface-2:  #1D2A27;
+    --ink:        #E8EEEB;
+    --ink-2:      #B6C4C0;
+    --muted:      #8A9A95;
+    --rule:       #2A3A36;
+    --rule-firm:  #3D524D;
+    --accent:     #5FC2AC;
+    --accent-wash:#13332C;
+    --alert:      #F08A62;
+    --alert-wash: #3A1E13;
+    --amber:      #D7AC52;
+    --amber-wash: #322613;
+  }
+}
+:root[data-theme="dark"] {
+  --paper:      #101816;
+  --surface:    #16211E;
+  --surface-2:  #1D2A27;
+  --ink:        #E8EEEB;
+  --ink-2:      #B6C4C0;
+  --muted:      #8A9A95;
+  --rule:       #2A3A36;
+  --rule-firm:  #3D524D;
+  --accent:     #5FC2AC;
+  --accent-wash:#13332C;
+  --alert:      #F08A62;
+  --alert-wash: #3A1E13;
+  --amber:      #D7AC52;
+  --amber-wash: #322613;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sheet {
+  max-width: 1360px;
+  margin: 0 auto;
+  padding: 36px 28px 72px;
+  display: flex;
+  flex-direction: column;
+  gap: 34px;
+}
+
+/* ---------------------------------------------------------- masthead */
+.masthead { display: flex; flex-direction: column; gap: 10px; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+h1 {
+  font-size: clamp(30px, 4.2vw, 46px);
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.02;
+  margin: 0;
+  text-wrap: balance;
+}
+h1 .thin { font-weight: 400; color: var(--ink-2); }
+
+.standfirst {
+  font-family: var(--serif);
+  font-size: 17px;
+  line-height: 1.55;
+  color: var(--ink-2);
+  max-width: 64ch;
+  margin: 0;
+}
+
+.masthead-rule {
+  height: 3px;
+  background: var(--ink);
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------- the grid */
+.scroller { overflow-x: auto; padding-bottom: 6px; }
+
+.grid {
+  min-width: 1080px;
+  display: grid;
+  grid-template-columns: 148px repeat(5, minmax(150px, 1fr));
+  border-top: 1px solid var(--rule-firm);
+  border-left: 1px solid var(--rule-firm);
+}
+
+.grid > * {
+  border-right: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+  padding: 11px 12px;
+  min-height: 56px;
+}
+
+/* column heads */
+.chead {
+  background: var(--ink);
+  color: var(--paper);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding-top: 9px;
+  padding-bottom: 9px;
+}
+.chead .ct {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.chead .cs { font-size: 11.5px; color: #A9BDB7; line-height: 1.3; }
+.chead.corner { background: var(--ink); }
+
+/* actor cells */
+.actor {
+  background: var(--surface-2);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  justify-content: center;
+}
+.actor .an { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; }
+.actor .am {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+
+/* step cells */
+.cell { background: var(--surface); }
+.cell.empty { background: var(--paper); }
+
+.step { display: flex; gap: 9px; align-items: flex-start; }
+
+.num {
+  flex: 0 0 auto;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 4px 5px;
+  border-radius: 3px;
+  background: var(--accent-wash);
+  color: var(--accent);
+  margin-top: 1px;
+}
+.step.guard .num { background: var(--alert-wash); color: var(--alert); }
+
+.body { font-size: 12.5px; line-height: 1.42; color: var(--ink-2); }
+.body b { color: var(--ink); font-weight: 600; }
+.body .hit { color: var(--alert); font-weight: 600; }
+
+.path {
+  display: block;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  margin-top: 5px;
+  word-break: break-word;
+}
+
+/* the guardrail spine */
+.cell.guardrail { box-shadow: inset 3px 0 0 var(--alert); }
+
+/* ---------------------------------------------------------- lower half */
+.lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr);
+  gap: 34px;
+  align-items: start;
+}
+@media (max-width: 860px) { .lower { grid-template-columns: 1fr; } }
+
+h2 {
+  font-size: 12px;
+  font-family: var(--mono);
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 12px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--rule-firm);
+}
+
+/* status ledger */
+table { width: 100%; border-collapse: collapse; }
+th {
+  text-align: left;
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  padding: 0 8px 7px 0;
+  border-bottom: 1px solid var(--rule);
+}
+td {
+  padding: 9px 8px 9px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 12.5px;
+  line-height: 1.4;
+  vertical-align: top;
+  color: var(--ink-2);
+}
+td.comp { color: var(--ink); font-weight: 600; width: 29%; }
+td.ev { font-family: var(--mono); font-size: 10.5px; color: var(--muted); }
+
+.pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.pill.live   { background: var(--accent-wash); color: var(--accent); }
+.pill.wait   { background: var(--amber-wash);  color: var(--amber); }
+.pill.off    { background: var(--surface-2);   color: var(--muted); }
+
+/* rationale */
+.why { display: flex; flex-direction: column; gap: 17px; }
+.why article { display: flex; flex-direction: column; gap: 4px; }
+.why h3 {
+  margin: 0;
+  font-size: 14.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+}
+.why p {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: 14.5px;
+  line-height: 1.52;
+  color: var(--ink-2);
+  max-width: 54ch;
+}
+.why code {
+  font-family: var(--mono);
+  font-size: 0.86em;
+  background: var(--surface-2);
+  padding: 1px 4px;
+  border-radius: 2px;
+  color: var(--ink);
+}
+
+.notinscope {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--muted);
+  border-left: 2px solid var(--rule-firm);
+  padding-left: 13px;
+  margin: 0;
+  max-width: 60ch;
+}
+
+footer {
+  border-top: 1px solid var(--rule-firm);
+  padding-top: 13px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 22px;
+}
+
+@media print {
+  @page { size: A3 landscape; margin: 10mm; }
+  body { background: #fff; }
+  .scroller { overflow: visible; }
+  .grid { min-width: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+</style>
+
+<div class="sheet">
+
+  <header class="masthead">
+    <div class="eyebrow">MESA Case 03 · Aangan Studio · as deployed 10 Oct 2026</div>
+    <h1>Ring to Handoff <span class="thin">— one enquiry, end to end</span></h1>
+    <p class="standfirst">
+      Rows are the actors, columns are the stages. Follow the numbers. A call arrives at any
+      hour, Vaani answers it, and steps 5 through 10 run entirely in code — no model has a vote
+      in any decision. The orange spine marks the pricing guardrail, the one failure this whole
+      design exists to prevent.
+    </p>
+    <div class="masthead-rule"></div>
+  </header>
+
+  <div class="scroller">
+    <div class="grid">
+
+      <!-- column heads -->
+      <div class="chead corner">
+        <span class="ct">Actor</span>
+      </div>
+      <div class="chead"><span class="ct">Trigger</span><span class="cs">what starts it</span></div>
+      <div class="chead"><span class="ct">Input</span><span class="cs">what comes in</span></div>
+      <div class="chead"><span class="ct">Context</span><span class="cs">what it knows</span></div>
+      <div class="chead"><span class="ct">Processing</span><span class="cs">rules in code</span></div>
+      <div class="chead"><span class="ct">Output</span><span class="cs">what leaves</span></div>
+
+      <!-- CALLER -->
+      <div class="actor">
+        <span class="an">Caller</span>
+        <span class="am">prospect · any hour</span>
+      </div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">1</span>
+          <span class="body"><b>Rings Aangan.</b> About a third of enquiries arrive outside
+          10am–7pm, when the front desk is empty.</span>
+        </div>
+      </div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+
+      <!-- VAANI -->
+      <div class="actor">
+        <span class="an">Vaani</span>
+        <span class="am">phone voice agent<br>agent 42022c05</span>
+      </div>
+      <div class="cell empty"></div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">2</span>
+          <span class="body"><b>Answers in seconds</b>, 24/7. Speech to text on the caller's
+          voice; one question at a time.</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">3</span>
+          <span class="body">The five criteria, the Pune and PCMC area list, the six-week
+          minimum, the out-of-scope list — and the deflection line.
+          <b class="hit">No price figures.</b>
+          <span class="path">knowledge base lives on Vaani · not in this repo</span></span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">4</span>
+          <span class="body">Asks about price → deflects, never disqualifies. Fits → offers a
+          consultation. Doesn't fit → closes politely.</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">5</span>
+          <span class="body"><b>Call ends</b> → post-call webhook POSTs the transcript, call
+          metadata and 14 extracted fields.
+          <span class="path">14/14 field names verified against the live agent</span></span>
+        </div>
+      </div>
+
+      <!-- SERVER -->
+      <div class="actor">
+        <span class="an">Our server</span>
+        <span class="am">Next.js 15.5.27<br>on Vercel</span>
+      </div>
+      <div class="cell empty"></div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">6</span>
+          <span class="body"><b>Verifies HMAC-SHA256</b> over the raw body. Bad signature → 401,
+          nothing written, nobody told.
+          <span class="path">api/vaani/webhook · lib/signature.ts</span></span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">7</span>
+          <span class="body"><b>Maps the payload. Never throws.</b> Junk coerced to null and
+          flagged; the raw payload is kept verbatim.
+          <span class="path">lib/vaani.ts</span></span>
+        </div>
+      </div>
+      <div class="cell guardrail">
+        <div class="step">
+          <span class="num">8</span>
+          <span class="body"><b>Service area</b> from a config file — out-of-area checked before
+          in, unknown never becomes in-area.
+          <span class="path">lib/service-area.ts</span></span>
+        </div>
+        <div class="step" style="margin-top:10px">
+          <span class="num">9</span>
+          <span class="body"><b>Five criteria re-derived in code.</b> Disagreement with the agent
+          is flagged, never silently overridden.
+          <span class="path">lib/qualification.ts</span></span>
+        </div>
+        <div class="step guard" style="margin-top:10px">
+          <span class="num">10</span>
+          <span class="body"><b class="hit">Transcript scanned for ₹ figures</b> in the agent's
+          own turns — a leak it reported as clean still gets caught.
+          <span class="path">lib/pricing-leak.ts</span></span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">11</span>
+          <span class="body"><b>Writes the row, then notifies.</b> Idempotent on
+          <code>vaani_call_id</code>, so a retry costs nothing and sends nothing twice.</span>
+        </div>
+      </div>
+
+      <!-- SUPABASE -->
+      <div class="actor">
+        <span class="an">Supabase</span>
+        <span class="am">Postgres · ap-south-1</span>
+      </div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">12</span>
+          <span class="body"><b>Caller history.</b> Earlier calls from the same number — repeat
+          callers, dropped and redialled.</span>
+        </div>
+      </div>
+      <div class="cell empty"></div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">13</span>
+          <span class="body">One row per enquiry, <b>never hard-deleted</b>. A second table makes
+          sure no alert can fire twice.
+          <span class="path">leads · alert_log · RLS deny-all</span></span>
+        </div>
+      </div>
+
+      <!-- EMAIL -->
+      <div class="actor">
+        <span class="an">Email</span>
+        <span class="am">Resend</span>
+      </div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">14</span>
+          <span class="body"><b>Sweeps on a timer.</b> Unclaimed past 30 min in office hours
+          reposts with its age; an escalation unacknowledged for 15 min alerts; two slow
+          responses in a day wake the founder.</span>
+        </div>
+      </div>
+      <div class="cell guardrail">
+        <div class="step">
+          <span class="num">15</span>
+          <span class="body"><b>Handoff card</b> to the designers — name, locality, property,
+          scope, state, timeline, who decides, source, budget, flags, call time. Claim and
+          Can't-take-it are signed one-click links.</span>
+        </div>
+        <div class="step guard" style="margin-top:10px">
+          <span class="num">16</span>
+          <span class="body"><b class="hit">Never the phone number.</b> It sits behind Open
+          record. Escalations go to a separate address with <i>I'm calling now</i> and no
+          Claim button.</span>
+        </div>
+      </div>
+
+      <!-- PEOPLE -->
+      <div class="actor">
+        <span class="an">People</span>
+        <span class="am">designers · founder</span>
+      </div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+      <div class="cell empty"></div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">17</span>
+          <span class="body"><b>Two designers can tap Claim at once.</b> One conditional UPDATE
+          settles it — exactly one wins, the other is told who holds it.</span>
+        </div>
+      </div>
+      <div class="cell">
+        <div class="step">
+          <span class="num">18</span>
+          <span class="body">Designer calls back <b>within the hour</b> and gives the price at
+          the consultation. The founder reads the dashboard and records whether the agent
+          judged the call correctly.</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="lower">
+
+    <section>
+      <h2>What each part is, and its status today</h2>
+      <table>
+        <thead>
+          <tr><th>Component</th><th>Status</th><th>Evidence</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="comp">Vaani phone agent</td>
+            <td><span class="pill wait">Live · not yet pointed here</span></td>
+            <td class="ev">Agent 42022c05 reachable; its 14 extracted field names pinned as a test fixture. Its webhook field is still null.</td>
+          </tr>
+          <tr>
+            <td class="comp">Webhook receiver</td>
+            <td><span class="pill live">Live</span></td>
+            <td class="ev">Unsigned POST to production returns 401. Health check reports signature_required.</td>
+          </tr>
+          <tr>
+            <td class="comp">Service-area gate</td>
+            <td><span class="pill live">Live</span></td>
+            <td class="ev">79 tests, including Wakad/Warje, Kondhwa/Kothrud, Pimple Saudagar/Nilakh and "Talegaon, near Pune".</td>
+          </tr>
+          <tr>
+            <td class="comp">Five criteria in code</td>
+            <td><span class="pill live">Live</span></td>
+            <td class="ev">57 tests run against the 40 real September enquiries, each checked against the outcome the front desk reached.</td>
+          </tr>
+          <tr>
+            <td class="comp">Pricing-leak scan</td>
+            <td><span class="pill live">Live</span></td>
+            <td class="ev">Catches a per-sq-ft rate the agent reported as clean; ignores a budget the caller volunteered.</td>
+          </tr>
+          <tr>
+            <td class="comp">Email handoff</td>
+            <td><span class="pill wait">Dry-run</span></td>
+            <td class="ev">Renders and logs the exact card; sends once a Resend key is set. A test asserts no card can contain a phone number.</td>
+          </tr>
+          <tr>
+            <td class="comp">Supabase database</td>
+            <td><span class="pill live">Live</span></td>
+            <td class="ev">120 leads stored — 40 real September enquiries plus 80 generated. Dashboard reads zero until the service-role key replaces the demo key.</td>
+          </tr>
+          <tr>
+            <td class="comp">Dashboard</td>
+            <td><span class="pill live">Live</span></td>
+            <td class="ev">aangan-enquiry-system-noreply6.vercel.app — 401 without the password, 200 with it.</td>
+          </tr>
+          <tr>
+            <td class="comp">30-minute sweep</td>
+            <td><span class="pill off">Needs a scheduler</span></td>
+            <td class="ev">Vercel Hobby allows cron once per day, so the daily digest ships in vercel.json and the sweep is a bearer-token endpoint.</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="notinscope" style="margin-top:16px">
+        Not in scope for this build: the voice agent's own prompt and knowledge base, which live
+        on Vaani; WhatsApp; and the web form. The last two would enter at step 6 and run the
+        same rules — <code>channel</code> is already an enum of phone, whatsapp and web_form, so
+        they attach without a migration.
+      </p>
+    </section>
+
+    <section class="why">
+      <h2>Why it's shaped this way</h2>
+
+      <article>
+        <h3>Code decides. No model votes.</h3>
+        <p>
+          Vaani reports what the caller said. Every gate that follows — service area, the five
+          criteria, the pricing scan — is plain code reading a config file, so a persuasive
+          caller cannot talk a model past a rule. Where the agent and the code disagree, the
+          lead is flagged for a human rather than quietly resolved either way.
+        </p>
+      </article>
+
+      <article>
+        <h3>Record before notify. Always.</h3>
+        <p>
+          The row is written before anything is sent, and notification failures are caught and
+          logged rather than raised. If email is down the enquiry still exists. The one case
+          that returns an error is a failed write — the one case where a retry is what we want.
+        </p>
+      </article>
+
+      <article>
+        <h3>The number is never in the message.</h3>
+        <p>
+          A shared inbox is read by several people and forwarded without thought. The callback
+          number lives on the record, behind the dashboard password, and a guard runs over
+          every rendered card — subject, text and HTML — and refuses to send one that contains
+          anything number-shaped, including a number the agent transcribed into a scope note.
+        </p>
+      </article>
+
+      <article>
+        <h3>A leaked price is an incident, not a metric.</h3>
+        <p>
+          It alerts the founder the moment it is written, independent of where the lead is
+          routed, and the dashboard shows it in red with <i>this must read zero</i>. Trusting
+          the agent's own answer would be the agent grading its own homework, so the transcript
+          is scanned too.
+        </p>
+      </article>
+
+      <article>
+        <h3>"I don't know" is never treated as "no".</h3>
+        <p>
+          An unrecognised locality is escalated to a human, not declined. Declining on a bad
+          phone line is how a Kothrud project gets turned away.
+        </p>
+      </article>
+    </section>
+  </div>
+
+  <footer>
+    <span>415 tests</span>
+    <span>Next.js 15.5.27 · Supabase · Vercel · Resend</span>
+    <span>Timings in Asia/Kolkata</span>
+    <span>github.com/samkitmehtallm/AANGAN-STUDIO</span>
+  </footer>
+</div>
