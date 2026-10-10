@@ -1,0 +1,31 @@
+{
+  "name": "aangan-enquiry-system",
+  "version": "1.0.0",
+  "private": true,
+  "engines": { "node": ">=20.9.0" },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "seed": "node --env-file=.env.local scripts/seed.mjs",
+    "replay": "node --env-file=.env.local scripts/replay-vaani.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.3",
+    "next": "15.5.27",
+    "react": "19.3.0",
+    "react-dom": "19.3.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "22.18.1",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "tailwindcss": "4.3.3",
+    "typescript": "5.9.2",
+    "vitest": "5.0.3"
+  }
+}
