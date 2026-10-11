@@ -33,8 +33,11 @@ if (!secret) {
 const stamp = Date.now()
 const ring = (secondsAgo) => new Date(Date.now() - secondsAgo * 1000).toISOString()
 
+// The spread at the end of this object used to overwrite call_id with the bare
+// override, so replayed leads landed under ids like "leak" and "qualified"
+// instead of the replay- prefix. That made them indistinguishable from real
+// calls and able to collide with one. The prefix is applied after the spread.
 const base = (overrides) => ({
-  call_id: `replay-${stamp}-${overrides.call_id ?? Math.random().toString(36).slice(2, 8)}`,
   received_at: ring(300),
   answered_at: ring(297),
   duration_sec: 214,
@@ -57,6 +60,7 @@ const base = (overrides) => ({
   'Price revealed by agent': 'no',
   'Call outcome': 'qualified',
   ...overrides,
+  call_id: `replay-${stamp}-${overrides.call_id ?? Math.random().toString(36).slice(2, 8)}`,
 })
 
 const CASES = {
